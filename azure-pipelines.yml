@@ -1,9 +1,16 @@
-- script: dotnet pack /p:PackageVersion=$(version)  # define version variable elsewhere in your pipeline
+resources:
+- repo: self
+queue:
+  name: Hosted VS2017
+steps:
+- task: NuGetCommand@2
+  inputs:
+    command: pack
+    packagesToPack: 'src/**/*.csproj'
+
 
 - task: NuGetCommand@2
   inputs:
     command: push
     nuGetFeedType: external
     publishFeedCredentials: SundotNugetPublish
-    versioningScheme: byEnvVar
-    versionEnvVar: version
