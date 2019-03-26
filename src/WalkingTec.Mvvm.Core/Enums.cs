@@ -5,6 +5,7 @@
     /// </summary>
     public enum ColumnFormatTypeEnum
     {
+        Dialog2,//弹出窗口
         Dialog,//弹出窗口
         Redirect,//转向
         Download,//下载

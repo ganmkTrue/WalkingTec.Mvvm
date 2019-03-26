@@ -10,7 +10,10 @@ namespace WalkingTec.Mvvm.Core.Implement
         {
             return "";
         }
-
+        public string MakeDialogButton2(ButtonTypesEnum buttonType, string url, string buttonText, int? width, int? height, string title = null, string buttonID = null, bool showDialog = true, bool resizable = true)
+        {
+            return "";
+        }
         public string MakeDownloadButton(ButtonTypesEnum buttonType, Guid fileID, string buttonText = null, string _DONOT_USE_CS = "default")
         {
             return "";

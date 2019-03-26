@@ -1,4 +1,4 @@
-
+﻿
 /*eslint eqeqeq: ["error", "smart"]*/
 DONOTUSE_TABLAYID = undefined;
 if (typeof String.prototype.startsWith != 'function') {
@@ -418,6 +418,7 @@ window.ff = {
     LinkedChange: function (url, target) {
         $.get(url, {}, function (data, status) {
             if (status === "success") {
+
                 var i = 0;
                 var item = null;
                 var form = layui.form;
@@ -444,6 +445,7 @@ window.ff = {
                         else {
                             $('#' + target).append("<input type='checkbox' name = '" + target + "' value = '" + item.Value + "' title = '" + item.Text + "'  />");
                         }
+
                     }
                    form.render('checkbox');
 

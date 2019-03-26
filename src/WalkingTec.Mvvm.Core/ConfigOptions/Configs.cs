@@ -220,7 +220,7 @@ namespace WalkingTec.Mvvm.Core
             {
                 if (_dbtype == null)
                 {
-                    _dbtype = DBTypeEnum.SqlServer;
+                    _dbtype = DBTypeEnum.MySql;
                 }
                 return _dbtype.Value;
             }

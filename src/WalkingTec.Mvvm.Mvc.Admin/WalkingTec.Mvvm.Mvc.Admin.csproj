@@ -6,7 +6,7 @@
     <Title>$(AssemblyName)</Title>
   </PropertyGroup>
 
-  <Import Project="..\..\common.props" />
+  <Import Project="..\common.props" />
   
   <ItemGroup>
     <EmbeddedResource Include="Areas\_Admin\Views\FrameworkUser\BatchDelete.cshtml" />
@@ -50,6 +50,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\WalkingTec.Mvvm.Mvc\WalkingTec.Mvvm.Mvc.csproj" />
     <ProjectReference Include="..\WalkingTec.Mvvm.TagHelpers.LayUI\WalkingTec.Mvvm.TagHelpers.LayUI.csproj" />

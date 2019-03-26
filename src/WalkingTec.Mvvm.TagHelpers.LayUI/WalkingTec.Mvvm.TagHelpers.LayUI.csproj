@@ -6,7 +6,7 @@
     <Title>$(AssemblyName)</Title>
   </PropertyGroup>
 
-  <Import Project="..\..\common.props" />
+  <Import Project="..\common.props" />
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.ViewFeatures" Version="2.2.0" />

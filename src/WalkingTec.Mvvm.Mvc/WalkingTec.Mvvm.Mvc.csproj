@@ -7,7 +7,7 @@
     <Title>$(AssemblyName)</Title>
   </PropertyGroup>
 
-  <Import Project="..\..\common.props" />
+  <Import Project="..\common.props" />
 
   <ItemGroup>
     <None Remove="echarts.common.min.js" />

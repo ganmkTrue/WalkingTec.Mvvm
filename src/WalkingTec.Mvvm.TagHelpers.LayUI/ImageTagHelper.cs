@@ -12,6 +12,8 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI
 
         public string Url { get; set; }
 
+        public string HttpUrl { get; set; }
+
         public override void Process(TagHelperContext context, TagHelperOutput output)
         {
             var vm = context.Items["model"] as BaseVM;
@@ -29,6 +31,18 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI
             output.Attributes.Add("id", Id + "img");
             if (!string.IsNullOrEmpty(Url))
                 output.Attributes.Add("src", Url);
+            base.Process(context, output);
+        }
+
+        public  void Process(TagHelperContext context, TagHelperOutput output,string _HttpUrl)
+        {
+            var vm = context.Items["model"] as BaseVM;
+            output.TagName = "img";
+            output.TagMode = TagMode.SelfClosing;
+            output.Attributes.Add("name", Field.Name + "img");
+            output.Attributes.Add("id", Id + "img");
+            if (!string.IsNullOrEmpty(_HttpUrl))
+                output.Attributes.Add("src", _HttpUrl);
             base.Process(context, output);
         }
 
