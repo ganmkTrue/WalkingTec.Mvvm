@@ -13,13 +13,14 @@
     "esModuleInterop": true, 
     "experimentalDecorators": true, 
     "skipLibCheck": true,
+    "allowUnusedLabels":true,
+    "extendedDiagnostics":true,
     "allowUnreachableCode": true
   },
   "include": [
     "src"
   ],
   "exclude": [
-    "src/index.js",
-    "src/setupProxy.js"
+    "**/*.js"
   ]
 }

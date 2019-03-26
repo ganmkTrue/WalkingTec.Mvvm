@@ -78,6 +78,7 @@ namespace WalkingTec.Mvvm.Mvc.Filters
                     model.CurrentUrl = ctrl.BaseUrl;
                     model.ConfigInfo = (Configs)context.HttpContext.RequestServices.GetService(typeof(Configs));
                     model.DataContextCI = ((GlobalData)context.HttpContext.RequestServices.GetService(typeof(GlobalData))).DataContextCI;
+                    model.ControllerName = ctrl.GetType().FullName;
                     if (ctrl is BaseController c)
                     {
                         model.WindowIds = c.WindowIds;
@@ -133,10 +134,10 @@ namespace WalkingTec.Mvvm.Mvc.Filters
                             {
                                 self.RemoveActionColumn();
                                 self.RemoveAction();
-                                if (temp.ErrorMessage.Count > 0)
-                                {
+                                //if (temp.ErrorMessage.Count > 0)
+                                //{
                                     self.AddErrorColumn();
-                                }
+                                //}
                             };
                             if (temp.ListVM.Searcher != null)
                             {
@@ -144,6 +145,7 @@ namespace WalkingTec.Mvvm.Mvc.Filters
                                 searcher.CopyContext(model);
                                 //searcher.DoReInit();
                             }
+                            temp.ListVM.DoInitListVM();
                         }
                         temp.LinkedVM?.DoInit();
                     }

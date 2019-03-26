@@ -1,5 +1,11 @@
+/**
+ * @author 冷 (https://github.com/LengYXin)
+ * @email lengyingxin8966@gmail.com
+ * @create date 2019-02-24 17:06:31
+ * @modify date 2019-02-24 17:06:31
+ * @desc [description]
+ */
 import { Button, Col, Divider, Drawer, Modal, Row, Spin } from 'antd';
-import { ColProps } from 'antd/lib/col';
 import { DrawerProps } from 'antd/lib/drawer';
 import { ModalProps } from 'antd/lib/modal';
 import { DesError } from 'components/decorators';
@@ -87,8 +93,11 @@ export class InfoShell extends React.Component<DrawerProps | ModalProps, any> {
                 {this.props.children}
             </Modal>
         }
+        const onCancel = (this.props as ModalProps).onCancel
+        const onClose = (e) => { onCancel && onCancel(e) }
         return <Drawer
             width={GlobalConfig.infoTypeWidth}
+            onClose={onClose}
             destroyOnClose
             {...this.props as any}
             className={`data-view-drawer ${this.props.className}`}>
@@ -96,19 +105,24 @@ export class InfoShell extends React.Component<DrawerProps | ModalProps, any> {
         </Drawer>
     }
 }
-
 /**
- * Items 外壳
+ * Items 外壳 布局
  */
 @DesError
 @observer
-export class InfoShellFooter extends React.Component<{ loadingEdit: boolean, onCancel?: () => void, submit?: boolean }, any> {
+export class InfoShellLayout extends React.Component<{ loading?: boolean }, any> {
     render() {
         const childrens = React.Children.toArray(this.props.children).map((node: any) => {
             try {
+                // console.log(lodash.has(node.props, "label"), node.props)
                 // 没有嵌套 col 的自动添加 嵌套的 解除
-                if (lodash.isEqual(lodash.toLower(node.type.name), lodash.toLower("FormItem"))) {
-                    return <InfoShellCol key={node.key}>
+                // if (["fieId", "models", "labelCol", "wrapperCol", "label", "hasFeedback"].some(x => lodash.has(node.props, x))) {
+                if (lodash.isEqual(node.type.wtmType, 'FormItem') || ["labelCol", "wrapperCol", "label", "hasFeedback"].some(x => lodash.has(node.props, x))) {
+                    const layout = lodash.get(node, "props.layout");
+                    return <InfoShellCol
+                        key={node.key}
+                        layout={layout}
+                    >
                         {node}
                     </InfoShellCol>
                 }
@@ -117,31 +131,48 @@ export class InfoShellFooter extends React.Component<{ loadingEdit: boolean, onC
                 return node
             }
         });
+        const spinning = lodash.get(this.props, 'loading', false);
+        return <div className="data-view-form-item">
+            <Spin tip="Loading..." spinning={lodash.get(this.props, 'loading', false)} key={lodash.toString(spinning)}>
+                <Row type="flex">
+                    {childrens}
+                </Row>
+            </Spin>
+        </div>
+    }
+}
+/**
+ * Items 外壳 底部按钮
+ */
+@DesError
+@observer
+export class InfoShellFooter extends React.Component<{ btns?: React.ReactNode, loadingEdit?: boolean, onCancel?: () => void, submit?: boolean }, any> {
+    render() {
         return <>
-            <div className="data-view-form-item">
-                <Spin tip="Loading..." spinning={this.props.loadingEdit}>
-                    <Row type="flex">
-                        {childrens}
-                    </Row>
-                </Spin>
-            </div>
-            <div className="data-view-form-btns" >
-                <Button onClick={() => this.props.onCancel && this.props.onCancel()} >取消 </Button>
+            <InfoShellLayout loading={this.props.loadingEdit}>
+                {this.props.children}
+            </InfoShellLayout>
+            {this.props.btns ? this.props.btns : <div className="data-view-form-btns" >
+                <Button onClick={() => this.props.onCancel && this.props.onCancel()} > 关闭 </Button>
                 {this.props.submit && <>
                     <Divider type="vertical" />
                     <Button loading={this.props.loadingEdit} type="primary" htmlType="submit"  >提交 </Button>
                 </>}
-            </div>
+            </div>}
+
         </>
     }
 }
 /**
  * Items 外壳
  */
-export class InfoShellCol extends React.Component<ColProps, any> {
+export class InfoShellCol extends React.Component<{ layout?: string }, any> {
     columnCount = GlobalConfig.infoColumnCount || 1;
     render() {
-        const colSpan = 24 / this.columnCount;//每列 值
+        let colSpan = 24;
+        if (this.props.layout != "row") {
+            colSpan = 24 / this.columnCount;//每列 值
+        }
         return <Col span={colSpan} {...this.props}>
             {this.props.children}
         </Col>

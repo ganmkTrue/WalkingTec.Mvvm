@@ -133,6 +133,7 @@ namespace WalkingTec.Mvvm.Mvc
             rv.WindowIds = "";
             rv.UIService = new DefaultUIService();
             rv.Log = this.Log;
+            rv.ControllerName = this.GetType().FullName;
             if (HttpContext != null && HttpContext.Request != null)
             {
                 try
@@ -208,7 +209,7 @@ namespace WalkingTec.Mvvm.Mvc
                         }
                     }
                 }
-                temp.LinkedVM.DoInit();
+                temp.LinkedVM?.DoInit();
                 temp.ListVM.DoSearch();
             }
             //如果ViewModel是ListVM，则初始化Searcher并调用Searcher的InitVM方法
@@ -392,12 +393,19 @@ namespace WalkingTec.Mvvm.Mvc
         #endregion
 
         [NonAction]
-        private T ReadFromCache<T>(string key, Func<T> setFunc)
+        protected T ReadFromCache<T>(string key, Func<T> setFunc, int? timeout = null)
         {
             if (Cache.TryGetValue(key, out T rv) == false)
             {
                 T data = setFunc();
-                Cache.Set(key, data);
+                if (timeout == null)
+                {
+                    Cache.Set(key, data);
+                }
+                else
+                {
+                    Cache.Set(key, data, DateTime.Now.AddSeconds(timeout.Value).Subtract(DateTime.Now));
+                }
                 return data;
             }
             else

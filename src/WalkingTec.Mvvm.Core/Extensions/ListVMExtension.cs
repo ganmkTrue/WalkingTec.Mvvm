@@ -89,7 +89,7 @@ namespace WalkingTec.Mvvm.Core.Extensions
                     }
                     break;
                 case ColumnFormatTypeEnum.Script:
-                    rv = vm.UIService.MakeScriptButton(info.ButtonType, info.Url, info.Width, info.Height, info.WindowID, info.Text, info.Title, info.ButtonID, info.Script).ToString();
+                    rv = vm.UIService.MakeScriptButton(info.ButtonType, info.Text,  info.Script, info.ButtonID, info.Url).ToString();
                     break;
                 case ColumnFormatTypeEnum.Html:
                     rv = info.Html;
@@ -197,19 +197,32 @@ namespace WalkingTec.Mvvm.Core.Extensions
                         //如果列是布尔值，直接返回true或false，让ExtJS生成CheckBox
                         if (ptype == typeof(bool) || ptype == typeof(bool?))
                         {
-                            if (html.ToLower() == "true")
+                            if (returnColumnObject == false)
                             {
-                                html = (self as BaseVM).UIService.MakeCheckBox(true, isReadOnly: true);
+                                if (html.ToLower() == "true")
+                                {
+                                    html = (self as BaseVM).UIService.MakeCheckBox(true, isReadOnly: true);
+                                }
+                                if (html.ToLower() == "false" || html == string.Empty)
+                                {
+                                    html = (self as BaseVM).UIService.MakeCheckBox(false, isReadOnly: true);
+                                }
                             }
-                            if (html.ToLower() == "false" || html == string.Empty)
+                            else
                             {
-                                html = (self as BaseVM).UIService.MakeCheckBox(false, isReadOnly: true);
+                                if(html != null && html != string.Empty)
+                                {
+                                    html = html.ToLower();
+                                }
                             }
                         }
                         //如果列是枚举，直接使用枚举的文本作为多语言的Key查询多语言文字
                         else if (ptype.IsEnumOrNullableEnum())
                         {
-                            html = PropertyHelper.GetEnumDisplayName(ptype, html);
+                            if (int.TryParse(html, out int enumvalue))
+                            {
+                                html = PropertyHelper.GetEnumDisplayName(ptype, enumvalue);
+                            }
                         }
                         if (style != string.Empty)
                         {

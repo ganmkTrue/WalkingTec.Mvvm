@@ -302,6 +302,7 @@ namespace WalkingTec.Mvvm.Core
         /// <summary>
         /// 修改，进行默认的修改操作。子类如有自定义操作应重载本函数
         /// </summary>
+        /// <param name="updateAllFields">为true时，框架会更新当前Entity的全部值，为false时，框架会检查Request.Form里的key，只更新表单提交的字段</param>
         public virtual void DoEdit(bool updateAllFields = false)
         {
 
@@ -378,7 +379,7 @@ namespace WalkingTec.Mvvm.Core
                                     }
                                     if (string.IsNullOrEmpty(ent.UpdateBy))
                                     {
-                                        ent.UpdateBy = LoginUserInfo.ITCode;
+                                        ent.UpdateBy = LoginUserInfo?.ITCode;
                                     }
                                 }
                                 foreach (var itempro in itemPros)
@@ -480,22 +481,25 @@ namespace WalkingTec.Mvvm.Core
                                 DC.AddEntity(item);
                             }
                         }
-                        else if (FC.Keys.Contains("Entity." + pro.Name + ".DONOTUSECLEAR"))
+                        else if (FC.Keys.Contains("Entity." + pro.Name + ".DONOTUSECLEAR") || (pro.GetValue(Entity) is IEnumerable<TopBasePoco> list2 && list2?.Count() == 0))
                         {
-                            PropertyInfo[] itemPros = ftype.GetProperties();
+                            PropertyInfo[] itemPros = ftype.GetProperties();                            
                             var _entity = DC.Set<TModel>().Include(pro.Name).AsNoTracking().Where(x => x.ID == Entity.ID).FirstOrDefault();
-                            IEnumerable<TopBasePoco> removeData = _entity.GetType().GetProperty(pro.Name).GetValue(_entity) as IEnumerable<TopBasePoco>;
-                            foreach (var item in removeData)
+                            if (_entity != null)
                             {
-                                foreach (var itempro in itemPros)
+                                IEnumerable<TopBasePoco> removeData = _entity.GetType().GetProperty(pro.Name).GetValue(_entity) as IEnumerable<TopBasePoco>;
+                                foreach (var item in removeData)
                                 {
-                                    if (itempro.PropertyType.IsSubclassOf(typeof(TopBasePoco)))
+                                    foreach (var itempro in itemPros)
                                     {
-                                        itempro.SetValue(item, null);
+                                        if (itempro.PropertyType.IsSubclassOf(typeof(TopBasePoco)))
+                                        {
+                                            itempro.SetValue(item, null);
+                                        }
                                     }
+                                    dynamic i = item;
+                                    DC.DeleteEntity(i);
                                 }
-                                dynamic i = item;
-                                DC.DeleteEntity(i);
                             }
                         }
                     }

@@ -1,15 +1,23 @@
+/**
+ * @author 冷 (https://github.com/LengYXin)
+ * @email lengyingxin8966@gmail.com
+ * @create date 2019-02-24 17:06:55
+ * @modify date 2019-02-24 17:06:55
+ * @desc [description]
+ */
 import * as React from 'react';
-
-export function DesError(Component: any) {
-    return class AppError extends React.Component<any, any> {
+import lodash from "lodash";
+export function DesError(Component: React.ComponentClass): any {
+    return class AppError extends Component {
         state = {
-            error: null,
-            errorInfo: null
+            ...this.state,
+            __error: null,
+            __errorInfo: null
         };
         componentDidCatch(error, info) {
             this.setState({
-                error: error,
-                errorInfo: info
+                __error: error,
+                __errorInfo: info
             })
         }
         render() {
@@ -19,15 +27,16 @@ export function DesError(Component: any) {
                     <div>
                         <h2>组件出错~</h2>
                         <details >
-                            {this.state.error && this.state.error.toString()}
-                            <br />
-                            {this.state.errorInfo.componentStack}
+                            <pre style={{ height: 300, background: "#f3f3f3" }}>
+                                <code>{lodash.toString(this.state.__error)}</code>
+                                <code>{lodash.get(this.state, '__errorInfo.componentStack')}</code>
+                            </pre>
                         </details>
                     </div>
                 );
             }
-            return <Component {...this.props} />;
+            return super.render();
         }
-    } as any
+    }
 
 }

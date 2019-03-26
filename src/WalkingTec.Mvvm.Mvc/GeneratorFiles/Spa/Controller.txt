@@ -14,8 +14,7 @@ namespace $namespace$
     [ActionDescription("$des$")]
     [ApiController]
     [Route("api/$modelname$")]
-	[Public]
-	public class $modelname$Controller : BaseApiController
+	public partial class $modelname$Controller : BaseApiController
     {
         [ActionDescription("搜索")]
         [HttpPost("Search")]
@@ -40,14 +39,14 @@ namespace $namespace$
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return BadRequest(ModelState.GetErrorJson());
             }
             else
             {
                 vm.DoAdd();
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(ModelState);
+                    return BadRequest(ModelState.GetErrorJson());
                 }
                 else
                 {
@@ -63,14 +62,14 @@ namespace $namespace$
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return BadRequest(ModelState.GetErrorJson());
             }
             else
             {
                 vm.DoEdit(true);
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(ModelState);
+                    return BadRequest(ModelState.GetErrorJson());
                 }
                 else
                 {
@@ -87,7 +86,7 @@ namespace $namespace$
             vm.DoDelete();
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return BadRequest(ModelState.GetErrorJson());
             }
             else
             {
@@ -95,6 +94,30 @@ namespace $namespace$
             }
 
         }
+
+		[HttpPost("BatchDelete")]
+        [ActionDescription("批量删除")]
+        public IActionResult BatchDelete(Guid[] ids)
+        {
+            var vm = CreateVM<$modelname$BatchVM>();
+            if (ids != null && ids.Count() > 0)
+            {
+                vm.Ids = ids;
+            }
+            else
+            {
+                return Ok();
+            }
+            if (!ModelState.IsValid || !vm.DoBatchDelete())
+            {
+                return BadRequest(ModelState.GetErrorJson());
+            }
+            else
+            {
+                return Ok(ids.Count());
+            }
+        }
+
 
         [ActionDescription("导出")]
         [HttpPost("ExportExcel")]
@@ -150,5 +173,7 @@ namespace $namespace$
                 return Ok(vm.EntityList.Count);
             }
         }
+
+$other$
     }
 }

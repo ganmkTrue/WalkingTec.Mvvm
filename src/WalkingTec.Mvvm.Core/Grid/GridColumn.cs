@@ -34,6 +34,10 @@ namespace WalkingTec.Mvvm.Core
                 if (_field == null)
                 {
                     _field = PI?.Name;
+                    if(_field == null)
+                    {
+                        _field = (ColumnExp?.Body as ConstantExpression)?.Value?.ToString();
+                    }
                 }
                 return _field;
             }
@@ -108,7 +112,7 @@ namespace WalkingTec.Mvvm.Core
                     if (Children != null && Children.Count() > 0)
                     {
                         len += Children.Where(x => x.Children == null || x.Children.Count() == 0).Count();
-                        var tempChildren = Children.Where(x=>x.Children!=null&&x.Children.Count()>0).ToList();
+                        var tempChildren = Children.Where(x => x.Children != null && x.Children.Count() > 0).ToList();
                         foreach (var item in tempChildren)
                         {
                             len += item.ChildrenLength;
@@ -341,7 +345,25 @@ namespace WalkingTec.Mvvm.Core
             var col = CompiledCol?.Invoke(source as T);
             if (Format == null || (needFormat == false && Format.Method.ReturnType != typeof(string)))
             {
-                rv = col?.ToString();
+                if (col == null)
+                {
+                    rv = null;
+                }
+                else if (col is DateTime dateTime)
+                {
+                    rv = dateTime.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+                else if (col != null && col is DateTime?)
+                {
+                    rv = (col as DateTime?).Value.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+                else if(col is Enum){
+                    rv = (int)col;
+                }
+                else
+                {
+                    rv = col?.ToString();
+                }
             }
             else
             {

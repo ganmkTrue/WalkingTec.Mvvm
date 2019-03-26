@@ -5,11 +5,14 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Runtime.Loader;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Routing;
@@ -21,8 +24,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.DependencyModel.Resolution;
 using Microsoft.Extensions.FileProviders;
+
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
+
 using WalkingTec.Mvvm.Core;
 using WalkingTec.Mvvm.Core.Extensions;
 using WalkingTec.Mvvm.Core.FDFS;
@@ -73,6 +77,7 @@ namespace WalkingTec.Mvvm.Mvc
                 con.DataPrivilegeSettings = new List<IDataPrivilege>();
             }
             services.AddSingleton(con);
+            services.AddResponseCaching();
             services.AddMemoryCache();
             services.AddDistributedMemoryCache();
             services.AddSession(options =>
@@ -81,6 +86,10 @@ namespace WalkingTec.Mvvm.Mvc
                 options.IdleTimeout = TimeSpan.FromSeconds(3600);
             });
             SetupDFS(con);
+
+
+            var mvc = gd.AllAssembly.Where(x => x.ManifestModule.Name == "WalkingTec.Mvvm.Mvc.dll").FirstOrDefault();
+            var admin = gd.AllAssembly.Where(x => x.ManifestModule.Name == "WalkingTec.Mvvm.Mvc.Admin.dll").FirstOrDefault();
             services.AddMvc(options =>
             {
                 // ModelBinderProviders
@@ -101,18 +110,33 @@ namespace WalkingTec.Mvvm.Mvc
                 {
                     //NamingStrategy = new CamelCaseNamingStrategy()
                 };
-            }).SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+            })
+            .ConfigureApplicationPartManager(m =>
+            {
+                var feature = new ControllerFeature();
+                m.ApplicationParts.Add(new AssemblyPart(mvc));
+                m.ApplicationParts.Add(new AssemblyPart(admin));
+                m.PopulateFeature(feature);
+                services.AddSingleton(feature.Controllers.Select(t => t.AsType()).ToArray());
+            })
+            .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
+            .ConfigureApiBehaviorOptions(options =>
+            {
+                options.InvalidModelStateResponseFactory = (a) =>
+                {
+                    return new BadRequestObjectResult(a.ModelState.GetErrorJson());
+                };
+            });
 
 
             services.Configure<RazorViewEngineOptions>(options =>
             {
                 options.FileProviders.Add(
                     new EmbeddedFileProvider(
-                        typeof(_CodeGenController).GetTypeInfo().Assembly,
+                        mvc,
                         "WalkingTec.Mvvm.Mvc" // your external assembly's base namespace
                     )
                 );
-                var admin = gd.AllAssembly.Where(x => x.ManifestModule.Name == "WalkingTec.Mvvm.Mvc.Admin.dll").FirstOrDefault();
                 if (admin != null)
                 {
                     options.FileProviders.Add(
@@ -149,6 +173,7 @@ namespace WalkingTec.Mvvm.Mvc
                 throw new InvalidOperationException("Can not find GlobalData service, make sure you call AddFrameworkService at ConfigService");
             }
 
+            app.UseResponseCaching();
             app.Use(async (context, next) =>
             {
                 if (context.Request.Path == "/")
@@ -173,7 +198,6 @@ namespace WalkingTec.Mvvm.Mvc
                     "WalkingTec.Mvvm.Mvc")
             });
             app.UseSession();
-
             if (customRoutes != null)
             {
                 app.UseMvc(customRoutes);
@@ -252,7 +276,7 @@ namespace WalkingTec.Mvvm.Mvc
             if (ConfigInfo.IsQuickDebug)
             {
                 menus = new List<FrameworkMenu>();
-                foreach (var model in allModule)
+                foreach (var model in allModule.Where(x=>x.NameSpace != "WalkingTec.Mvvm.Admin.Api"))
                 {
                     var modelmenu = new FrameworkMenu
                     {
@@ -363,6 +387,10 @@ namespace WalkingTec.Mvvm.Mvc
                     }
                 }
             }
+            //models.Add(typeof(FrameworkUserBase));
+            //models.Add(typeof(FrameworkGroup));
+            //models.Add(typeof(FrameworkRole));
+            //models.Add(typeof(ActionLog));
             return models;
         }
 

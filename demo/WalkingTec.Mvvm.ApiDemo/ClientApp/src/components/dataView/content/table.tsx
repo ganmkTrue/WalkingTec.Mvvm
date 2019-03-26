@@ -5,17 +5,25 @@
  * @modify date 2018-09-12 18:53:22
  * @desc [description]
 */
-import { Alert, Divider, Row, Table, notification } from 'antd';
+import { Alert, Button, Divider, Icon, Switch, Table } from 'antd';
 import { ColumnProps } from 'antd/lib/table';
+import globalConfig from 'global.config';
+import lodash from 'lodash';
+import { Debounce } from 'lodash-decorators';
 import { action, observable, runInAction, toJS } from 'mobx';
 import { observer } from 'mobx-react';
 import * as React from 'react';
 import ReactDOM from 'react-dom';
-import lodash from 'lodash';
 import { Resizable } from 'react-resizable';
-import Rx from 'rxjs';
+import { fromEvent, Subscription } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 import Store from 'store/dataSource';
+import Regular from 'utils/Regular';
+import { ToImg } from '../help/toImg';
 import './style.less';
+import RequestFiles from 'utils/RequestFiles';
+
+
 interface ITablePorps {
     /** 状态 */
     Store: Store,
@@ -41,26 +49,31 @@ const TableUtils = {
     onSetColumnsWidth(tableBody, columns: ColumnProps<any>[]) {
         // 获取页面宽度
         if (tableBody) {
+            // debugger
             // 表头
             const { clientWidth } = tableBody.querySelector(".ant-table-thead ");
             // 选择框
-            const { clientWidth: selectionWidth = 0 } = tableBody.querySelector(".ant-table-thead .ant-table-selection-column");
-            TableUtils.selectionColumnWidth = selectionWidth;
+            // const selectionColumn: HTMLDivElement = tableBody.querySelector(".ant-table-thead .ant-table-selection-column");
+            // TableUtils.selectionColumnWidth = lodash.get(selectionColumn, 'clientWidth', 0);
+            // lodash.defer(() => {
+            //     console.log(selectionColumn.clientWidth)
+            // })
+            // console.log(TableUtils.selectionColumnWidth)
             let exclude = 0;
-            const notFixed = columns.filter(x => {
-                if (typeof x.fixed === "string") {
-                    if (typeof x.width === "number") {
-                        exclude += x.width
-                    }
-                    return false
-                }
-                return true
-            })
-            const columnsLenght = notFixed.length;
+            // const notFixed = columns.filter(x => {
+            //     if (typeof x.fixed === "string") {
+            //         if (typeof x.width === "number") {
+            //             exclude += x.width
+            //         }
+            //         return false
+            //     }
+            //     return true
+            // })
+            const columnsLenght = columns.length;
             //计算表格设置的总宽度
-            const columnWidth = this.onGetcolumnsWidth(notFixed);
+            const columnWidth = this.onGetcolumnsWidth(columns);
             // 总宽度差值
-            const width = clientWidth - columnWidth - exclude - selectionWidth;
+            const width = clientWidth - columnWidth - exclude + 300;// TableUtils.selectionColumnWidth;
             if (width > 0) {
                 const average = Math.ceil(width / columnsLenght)
                 // 平均分配
@@ -102,11 +115,10 @@ const TableUtils = {
     * 动态设置列宽
     */
     onGetScroll(columns) {
-        let scrollX = this.onGetcolumnsWidth(columns) + TableUtils.selectionColumnWidth - 5;
+        let scrollX = this.onGetcolumnsWidth(columns) //+ TableUtils.selectionColumnWidth;
         // scrollX = scrollX > this.clientWidth ? scrollX : this.clientWidth - 10;
         return {
-            x: scrollX,
-            // y: 550
+            x: scrollX + 100,
         }
     },
     /**
@@ -145,19 +157,10 @@ const TableUtils = {
 @observer
 export class DataViewTable extends React.Component<ITablePorps, any> {
     @observable columns = this.props.columns.map(x => {
-        if (typeof x.fixed === "string") {
-            if (!x.width) {
-                notification.warn({
-                    message: "fixed 列 需要设置固定宽度",
-                    description: `Title ${x.title}`
-                })
-                x.width = 150;
-            }
-            return x;
-        }
-        x.width = x.width || 100;
+        x.width = lodash.get(x, 'width', 200)
         return x;
     });
+    @observable Height = 500;
     Store = this.props.Store;
     tableRef = React.createRef<any>();
     tableDom: HTMLDivElement;
@@ -175,6 +178,7 @@ export class DataViewTable extends React.Component<ITablePorps, any> {
      * @param filters 
      * @param sorter 
      */
+    @Debounce(300)
     onChange(page, filters, sorter) {
         let sort: any = "";
         if (sorter.columnKey) {
@@ -186,7 +190,11 @@ export class DataViewTable extends React.Component<ITablePorps, any> {
                 // sort = `${sorter.columnKey} asc`
             }
         }
-        this.Store.onSearch({}, sort, page.current, page.pageSize)
+        this.Store.onSearch({
+            SortInfo: sort,
+            Page: page.current,
+            Limit: page.pageSize
+        })
     }
     /**
      * 拖拽
@@ -233,24 +241,42 @@ export class DataViewTable extends React.Component<ITablePorps, any> {
             onChange: e => this.Store.onSelectChange(e),
         };
     }
-    /**
-     * 
-     */
-    resize: Rx.Subscription
-    componentDidMount() {
+    getHeight() {
+        if (globalConfig.lockingTableRoll) {
+            return {
+                y: this.Height
+            }
+        }
+        return {}
+    }
+    @action
+    onCalculationHeight() {
+        if (globalConfig.lockingTableRoll && this.tableDom) {
+            let height = window.innerHeight - this.tableDom.offsetTop - 120;//(globalConfig.tabsPage ? 210 : 120);
+            if (globalConfig.tabsPage) {
+                height -= 90;
+                if (lodash.some(["right", "left"], data => lodash.eq(data, globalConfig.tabPosition))) {
+                    height += 40;
+                }
+            }
+            if (this.Height != height) {
+                this.Height = height
+            }
+        }
+    }
+    resize: Subscription
+    async componentDidMount() {
         try {
             this.tableDom = ReactDOM.findDOMNode(this.tableRef.current) as any;
             TableUtils.clientWidth = this.tableDom.clientWidth;
-            this.Store.onSearch({}, "", this.Store.dataSource.Page, this.Store.dataSource.Limit);
+            this.Store.onSearch();
+            this.onCalculationHeight()
             this.initColumns();
-            this.resize = Rx.Observable.fromEvent(window, "resize").subscribe(e => {
-                if (this.tableDom.clientWidth > TableUtils.clientWidth) {
-                    TableUtils.clientWidth = this.tableDom.clientWidth;
-                    this.initColumns();
-                }
+            this.resize = fromEvent(window, "resize").pipe(debounceTime(300)).subscribe(e => {
+                this.onCalculationHeight()
             });
         } catch (error) {
-
+            console.error(error)
         }
     }
     componentWillUnmount() {
@@ -259,40 +285,50 @@ export class DataViewTable extends React.Component<ITablePorps, any> {
     render() {
         const dataSource = this.Store.dataSource;
         if (dataSource.Data) {
-            const columns = [...this.columns];
-            return (
-                <Row >
-                    <Table
-                        ref={this.tableRef}
-                        bordered
-                        size="default"
-                        className="data-view-table"
-                        components={TableUtils.components}
-                        dataSource={[...dataSource.Data]}
-                        onChange={this.onChange.bind(this)}
-                        columns={columns}
-                        scroll={TableUtils.onGetScroll(columns)}
-                        rowSelection={this.onRowSelection()}
-                        loading={this.Store.pageState.loading}
-                        pagination={
-                            {
-                                // hideOnSinglePage: true,//只有一页时是否隐藏分页器
-                                position: "bottom",
-                                showSizeChanger: true,//是否可以改变 pageSize
-                                showQuickJumper: true,
-                                pageSize: dataSource.Limit,
-                                size: "default",
-                                current: dataSource.Page,
-                                defaultPageSize: dataSource.Limit,
-                                defaultCurrent: dataSource.Page,
-                                total: dataSource.Count
-                            }
+            const columns = this.columns
+                .map(x => {
+                    return {
+                        ...x,
+                        render: (text, record, index) => {
+                            return <div className="columns-render" style={{ maxWidth: x.width }}>
+                                {x.render ? x.render(text, record, index) : text}
+                            </div>
                         }
-                    />
-                </Row>
+                    }
+                });
+            const scroll = { ...TableUtils.onGetScroll(columns), ...this.getHeight() }
+            return (
+                <Table
+                    ref={this.tableRef}
+                    bordered
+                    size="small"
+                    className="data-view-table"
+                    components={TableUtils.components}
+                    dataSource={toJS(dataSource.Data)}
+                    onChange={this.onChange.bind(this)}
+                    columns={columns}
+                    scroll={scroll}
+                    rowSelection={this.onRowSelection()}
+                    loading={this.Store.pageState.loading}
+                    pagination={
+                        {
+                            // hideOnSinglePage: true,//只有一页时是否隐藏分页器
+                            position: "bottom",
+                            showSizeChanger: true,//是否可以改变 pageSize
+                            showQuickJumper: true,
+                            pageSize: dataSource.Limit,
+                            pageSizeOptions: lodash.get(globalConfig, 'pageSizeOptions', ['10', '20', '30', '40', '50', '100', '200']),
+                            size: "small",
+                            current: dataSource.Page,
+                            // defaultPageSize: dataSource.Limit,
+                            // defaultCurrent: dataSource.Page,
+                            total: dataSource.Count
+                        }
+                    }
+                />
             );
         } else {
-            return <div>
+            return <div >
                 <Divider />
                 <Alert
                     showIcon
@@ -303,4 +339,49 @@ export class DataViewTable extends React.Component<ITablePorps, any> {
         }
 
     }
+}
+/**
+ * 重写 列渲染 函数 
+ * @param text 
+ * @param record 
+ */
+export function columnsRender(text, record) {
+    if (lodash.isBoolean(text) || text === "true" || text === "false") {
+        text = (text || text === "true") ? <Switch checkedChildren={<Icon type="check" />} unCheckedChildren={<Icon type="close" />} disabled defaultChecked /> : <Switch checkedChildren={<Icon type="check" />} unCheckedChildren={<Icon type="close" />} disabled />;
+    } else if (Regular.isHtml.test(text)) {
+        // text = <Popover content={
+        //     <div dangerouslySetInnerHTML={{ __html: text }}></div>
+        // } trigger="hover">
+        //     <a>查看详情</a>
+        // </Popover>
+        text = <div dangerouslySetInnerHTML={{ __html: text }}></div>
+    }
+    return <div className="data-view-columns-render" title={text}>
+        <span>{text}</span>
+    </div>
+}
+/**
+ * 重写 图片 函数 
+ * @param text 
+ * @param record 
+ */
+export function columnsRenderImg(text, record) {
+    return <div>
+        <ToImg fileID={text} />
+    </div>
+}
+/**
+ * 重写 下载 函数 
+ * @param text 
+ * @param record 
+ */
+export function columnsRenderDownload(text, record) {
+    if (text) {
+        return <div style={{ textAlign: "center" }} >
+            <Button shape="circle" icon="download" onClick={e => {
+                window.open(RequestFiles.onFileDownload(text))
+            }} />
+        </div>
+    }
+    return null
 }

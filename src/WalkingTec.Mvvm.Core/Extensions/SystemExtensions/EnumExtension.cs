@@ -19,23 +19,27 @@ namespace WalkingTec.Mvvm.Core.Extensions
         public static List<ComboSelectListItem> ToListItems(this Type self, object value = null, bool pleaseSelect = false)
         {
             string[] names = null;
+            Array values = null;
             //如果是枚举
             if (self.IsEnum)
             {
                 names = Enum.GetNames(self);
+                values = Enum.GetValues(self);
             }
             //如果是nullable的枚举
             if (self.IsGenericType && self.GenericTypeArguments[0].IsEnum)
             {
                 names = Enum.GetNames(self.GenericTypeArguments[0]);
+                values = Enum.GetValues(self.GenericTypeArguments[0]);
             }
             //生成下拉菜单数据
             List<ComboSelectListItem> rv = new List<ComboSelectListItem>();
             if (names != null)
             {
-                foreach (var name in names)
+                for(int i=0;i<names.Length;i++)
                 {
-                    var newitem = new ComboSelectListItem { Text = PropertyHelper.GetEnumDisplayName(self, name), Value = name };
+                    var name = names[i];
+                    var newitem = new ComboSelectListItem { Text = PropertyHelper.GetEnumDisplayName(self, name), Value = ((int)values.GetValue(i)).ToString() };
                     if (value != null && name == value.ToString())
                     {
                         newitem.Selected = true;

@@ -5,10 +5,11 @@
  * @modify date 2018-09-12 18:52:54
  * @desc [description]
 */
-import { Request } from 'utils/Request';
+import Regular from 'utils/Regular';
 import { action, observable, runInAction } from "mobx";
 import lodash from 'lodash';
 import User from './user';
+import globalConfig from 'global.config';
 interface subMenu {
     Key?: string,
     Name?: string,
@@ -30,21 +31,24 @@ class Store {
      * 获取菜单
      */
     async getMenu() {
-        let menu = [];
-        if (User.User.role == "administrator") {
-            const res = await import("../../subMenu.json").then(x => x.default);
-            menu = res;
-            // menu.push({
-            //     "Key": "system",
-            //     "Name": "系统设置",
-            //     "Icon": "setting",
-            //     "Path": "/system",
-            //     "Component": "",
-            //     "Children": []
-            // })
-
-        }
-        this.setSubMenu(menu);
+        // if (globalConfig.development) {
+            const res: any[] = await import("../../subMenu.json").then(x => x.default);
+            this.setSubMenu(lodash.map(res, data => {
+                // 跨域页面
+                if (Regular.url.test(data.Path)) {
+                    data.Path = "/external/" + encodeURIComponent(data.Path);
+                }
+                // public 下的 pages 页面
+                if (lodash.includes(data.Path, globalConfig.staticPage)) {
+                    data.Path = "/external/" + encodeURIComponent(lodash.replace(data.Path, globalConfig.staticPage, `${window.location.origin}/pages`));
+                }
+                // public 下的 pages 页面
+                if (lodash.includes(data.Path, globalConfig.dynamicPage)) {
+                    data.Path = "/external/" + encodeURIComponent(lodash.replace(data.Path, globalConfig.dynamicPage, `${window.location.origin}`));
+                }
+                return data;
+            }));
+        // }
     }
 
     /**  设置菜单 */

@@ -270,7 +270,7 @@ namespace WalkingTec.Mvvm.Mvc
                     Directory.CreateDirectory($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\store");
                 }
                 File.WriteAllText($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\views\\action.tsx", GenerateReactView("action"), Encoding.UTF8);
-                File.WriteAllText($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\views\\details.tsx", GenerateReactView("details"), Encoding.UTF8);
+                File.WriteAllText($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\views\\forms.tsx", GenerateReactView("forms"), Encoding.UTF8);
                 File.WriteAllText($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\views\\models.tsx", GenerateReactView("models"), Encoding.UTF8);
                 File.WriteAllText($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\views\\other.tsx", GenerateReactView("other"), Encoding.UTF8);
                 File.WriteAllText($"{MainDir}\\ClientApp\\src\\pages\\{ModelName.ToLower()}\\views\\search.tsx", GenerateReactView("search"), Encoding.UTF8);
@@ -334,7 +334,35 @@ namespace WalkingTec.Mvvm.Mvc
             {
                 rv = rv.Replace("$area$", $"[Area(\"{Area}\")]");
             }
-            return rv;
+            if (UI == UIEnum.React)
+            {
+                StringBuilder other = new StringBuilder();
+                List<FieldInfo> pros = FieldInfos.Where(x => x.IsSearcherField == true || x.IsFormField == true).ToList();
+                List<PropertyInfo> existSubPro = new List<PropertyInfo>();
+                for (int i = 0; i < pros.Count; i++)
+                {
+                    var item = pros[i];
+                    if (string.IsNullOrEmpty(item.RelatedField) == false && item.SubField != "`file")
+                    {
+                        var subtype = Type.GetType(item.RelatedField);
+                        var subpro = subtype.GetProperty(item.SubField);
+                        existSubPro.Add(subpro);
+                        int count = existSubPro.Where(x => x.Name == subpro.Name).Count();
+                        if (count == 1)
+                        {
+
+                            other.AppendLine($@"
+        [HttpGet(""Get{subtype.Name}s"")]
+        public ActionResult Get{subtype.Name}s()
+        {{
+            return Ok(DC.Set<{subtype.Name}>().GetSelectListItems(LoginUserInfo?.DataPrivileges, null, x => x.{item.SubField}));
+        }}");
+                        }
+                    }
+                }
+                rv = rv.Replace("$other$", other.ToString());
+            }
+                return rv;
         }
 
         public string GenerateVM(string name)
@@ -363,7 +391,7 @@ namespace WalkingTec.Mvvm.Mvc
                         {
                             continue;
                         }
-                        var fname = "All" + pro.FieldName.Substring(0, pro.FieldName.Length - 2) + "s";
+                        var fname = "All" + pro.FieldName + "s";
                         prostring += $@"
         public List<ComboSelectListItem> {fname} {{ get; set; }}";
                         initstr += $@"
@@ -377,12 +405,34 @@ namespace WalkingTec.Mvvm.Mvc
         [Display(Name = ""{display.Name}"")]";
                     }
                     string typename = proType.PropertyType.Name;
-                    if (proType.PropertyType.IsNullable())
+                    string proname = proType.Name;
+                    if (string.IsNullOrEmpty(pro.RelatedField) == false)
                     {
-                        typename = proType.PropertyType.GetGenericArguments()[0].Name + "?";
+                        if (string.IsNullOrEmpty(pro.SubIdField) == true)
+                        {
+                            var fk = DC.GetFKName2(modelType, pro.FieldName);
+                            proname = fk;
+                            typename = "Guid?";
+                        }
+                        else
+                        {
+                            proname = $@"Selected{pro.FieldName}IDs";
+                            typename = "List<Guid>";
+                        }
+                    }
+                    else
+                    {
+                        if (proType.PropertyType.IsNullable())
+                        {
+                            typename = proType.PropertyType.GetGenericArguments()[0].Name + "?";
+                        }
+                        else if (proType.PropertyType != typeof(string))
+                        {
+                            typename = proType.PropertyType.Name + "?";
+                        }
                     }
                     prostring += $@"
-        public {typename} {proType.Name} {{ get; set; }}";
+        public {typename} {proname} {{ get; set; }}";
                 }
                 rv = rv.Replace("$pros$", prostring).Replace("$init$", initstr);
                 rv = GetRelatedNamespace(pros, rv);
@@ -395,6 +445,8 @@ namespace WalkingTec.Mvvm.Mvc
                 string subprostring = "";
                 string formatstring = "";
                 var pros = FieldInfos.Where(x => x.IsListField == true).ToList();
+                Type modelType = Type.GetType(SelectedModel);
+                List<PropertyInfo> existSubPro = new List<PropertyInfo>();
                 foreach (var pro in pros)
                 {
                     if (string.IsNullOrEmpty(pro.RelatedField))
@@ -409,15 +461,23 @@ namespace WalkingTec.Mvvm.Mvc
                         var subtype = Type.GetType(pro.RelatedField);
                         if (subtype == typeof(FileAttachment))
                         {
+                            var filefk = DC.GetFKName2(modelType, pro.FieldName);
                             headerstring += $@"
-                this.MakeGridHeader(x => x.{pro.FieldName}).SetFormat({pro.FieldName}Format),";
+                this.MakeGridHeader(x => x.{filefk}).SetFormat({filefk}Format),";
                             selectstring += $@"
-                    {pro.FieldName} = x.{pro.FieldName},";
-                            formatstring += GetResource("HeaderFormat.txt").Replace("$modelname$", ModelName).Replace("$field$", pro.FieldName);
+                    {filefk} = x.{filefk},";
+                            formatstring += GetResource("HeaderFormat.txt").Replace("$modelname$", ModelName).Replace("$field$", filefk);
                         }
                         else
                         {
                             var subpro = subtype.GetProperty(pro.SubField);
+                            existSubPro.Add(subpro);
+                            string prefix = "";
+                            int count = existSubPro.Where(x => x.Name == subpro.Name).Count();
+                            if(count > 1)
+                            {
+                                prefix = count + "";
+                            }
                             string subtypename = subpro.PropertyType.Name;
                             if (subpro.PropertyType.IsNullable())
                             {
@@ -426,34 +486,64 @@ namespace WalkingTec.Mvvm.Mvc
 
                             var subdisplay = subpro.GetCustomAttribute<DisplayAttribute>();
                             headerstring += $@"
-                this.MakeGridHeader(x => x.{pro.SubField + "_view"}),";
-                            selectstring += $@"
-                    {pro.SubField + "_view"} = x.{pro.FieldName.Substring(0, pro.FieldName.Length - 2)}.{pro.SubField},";
+                this.MakeGridHeader(x => x.{pro.SubField + "_view"+ prefix}),";
+                            if (string.IsNullOrEmpty(pro.SubIdField) == true)
+                            {
+                                selectstring += $@"
+                    {pro.SubField + "_view" + prefix} = x.{pro.FieldName}.{pro.SubField},";
+                            }
+                            else
+                            {
+                                selectstring += $@"
+                    {pro.SubField + "_view" + prefix} = DC.Set<{subtype.Name}>().Where(y => x.{pro.FieldName}.Select(z => z.{pro.SubIdField}).Contains(y.ID)).Select(y => y.{pro.SubField}).ToSpratedString(null,"",""),";
+                            }
                             if (subdisplay?.Name != null)
                             {
                                 subprostring += $@"
         [Display(Name = ""{subdisplay.Name}"")]";
-                                subprostring += $@"
-        public {subtypename} {pro.SubField + "_view"} {{ get; set; }}";
                             }
+                            subprostring += $@"
+        public {subtypename} {pro.SubField + "_view" + prefix} {{ get; set; }}";
                         }
                     }
 
                 }
                 var wherepros = FieldInfos.Where(x => x.IsSearcherField == true).ToList();
-                Type modelType = Type.GetType(SelectedModel);
                 foreach (var pro in wherepros)
                 {
-                    var proType = modelType.GetProperty(pro.FieldName).PropertyType;
-                    if (proType == typeof(string))
+                    if(pro.SubField == "`file")
                     {
-                        wherestring += $@"
-                .CheckContain(Searcher.{pro.FieldName}, x=>x.{pro.FieldName})";
+                        continue;
+                    }
+                    var proType = modelType.GetProperty(pro.FieldName).PropertyType;
+                    if (string.IsNullOrEmpty(pro.RelatedField) == false)
+                    {
+                        if (string.IsNullOrEmpty(pro.SubIdField) == true)
+                        {
+                            var fk = DC.GetFKName2(modelType, pro.FieldName);
+                            wherestring += $@"
+                .CheckEqual(Searcher.{fk}, x=>x.{fk})";
+                        }
+                        else
+                        {
+                            var subtype = Type.GetType(pro.RelatedField);
+                            var fk2 = DC.GetFKName(modelType, pro.FieldName);
+                            wherestring += $@"
+                .CheckWhere(Searcher.Selected{pro.FieldName}IDs,x=>DC.Set<{proType.GetGenericArguments()[0].Name}>().Where(y=>Searcher.Selected{pro.FieldName}IDs.Contains(y.{pro.SubIdField})).Select(z=>z.{fk2}).Contains(x.ID))";
+                        }
                     }
                     else
                     {
-                        wherestring += $@"
+                        if (proType == typeof(string))
+                        {
+                            wherestring += $@"
+                .CheckContain(Searcher.{pro.FieldName}, x=>x.{pro.FieldName})";
+                        }
+                        else
+                        {
+                            wherestring += $@"
                 .CheckEqual(Searcher.{pro.FieldName}, x=>x.{pro.FieldName})";
+                        }
 
                     }
                 }
@@ -465,6 +555,8 @@ namespace WalkingTec.Mvvm.Mvc
                 string prostr = "";
                 string initstr = "";
                 string includestr = "";
+                string addstr = "";
+                string editstr = "";
                 var pros = FieldInfos.Where(x => x.IsFormField == true && string.IsNullOrEmpty(x.RelatedField) == false).ToList();
                 foreach (var pro in pros)
                 {
@@ -473,16 +565,53 @@ namespace WalkingTec.Mvvm.Mvc
                     {
                         continue;
                     }
-                    var fname = "All" + pro.FieldName.Substring(0, pro.FieldName.Length - 2) + "s";
+                    var fname = "All" + pro.FieldName + "s";
                     prostr += $@"
         public List<ComboSelectListItem> {fname} {{ get; set; }}";
                     initstr += $@"
             {fname} = DC.Set<{subtype.Name}>().GetSelectListItems(LoginUserInfo.DataPrivileges, null, y => y.{pro.SubField});";
                     includestr += $@"
-            SetInclude(x => x.{pro.FieldName.Substring(0, pro.FieldName.Length - 2)});";
+            SetInclude(x => x.{pro.FieldName});";
 
+                    if(string.IsNullOrEmpty(pro.SubIdField) == false)
+                    {
+                        Type modelType = Type.GetType(SelectedModel);
+                        var protype = modelType.GetProperty(pro.FieldName);
+                        prostr += $@"
+        [Display(Name = ""{protype.GetPropertyDisplayName()}"")]
+        public List<Guid> Selected{pro.FieldName}IDs {{ get; set; }}";
+                        initstr += $@"
+            Selected{pro.FieldName}IDs = Entity.{pro.FieldName}.Select(x => x.{pro.SubIdField}).ToList();";
+                        addstr += $@"
+            if (Selected{pro.FieldName}IDs != null)
+            {{
+                foreach (var id in Selected{pro.FieldName}IDs)
+                {{
+                    Entity.{pro.FieldName}.Add(new {protype.PropertyType.GetGenericArguments()[0].Name} {{ {pro.SubIdField} = id }});
+                }}
+            }}
+";
+                        editstr += $@"
+            if(Selected{pro.FieldName}IDs == null || Selected{pro.FieldName}IDs.Count == 0)
+            {{
+                FC.Add(""Entity.Selected{pro.FieldName}IDs.DONOTUSECLEAR"", ""true"");
+            }}
+            else
+            {{
+                Entity.{pro.FieldName} = new List<{protype.PropertyType.GetGenericArguments()[0].Name}>();
+                Selected{pro.FieldName}IDs.ForEach(x => Entity.{pro.FieldName}.Add(new {protype.PropertyType.GetGenericArguments()[0].Name} {{ ID = Guid.NewGuid(), {pro.SubIdField} = x }}));
+            }}
+";
+                    }
                 }
-                rv = rv.Replace("$pros$", prostr).Replace("$init$", initstr).Replace("$include$", includestr);
+                if (UI == UIEnum.LayUI)
+                {
+                    rv = rv.Replace("$pros$", prostr).Replace("$init$", initstr).Replace("$include$", includestr).Replace("$add$", addstr).Replace("$edit$", editstr);
+                }
+                if(UI == UIEnum.React)
+                {
+                    rv = rv.Replace("$pros$", "").Replace("$init$", "").Replace("$include$", includestr).Replace("$add$", "").Replace("$edit$", "");
+                }
                 rv = GetRelatedNamespace(pros, rv);
             }
             if (name == "ImportVM")
@@ -547,31 +676,58 @@ namespace WalkingTec.Mvvm.Mvc
                 {
                     if (name == "DeleteView" || name == "DetailsView")
                     {
-                        if (string.IsNullOrEmpty(item.RelatedField) == false && item.SubField != "`file")
+                        if (string.IsNullOrEmpty(item.SubIdField) == true)
                         {
-                            fieldstr.Append($@"<wt:display field=""{pre}.{item.FieldName.Substring(0, item.FieldName.Length - 2)}.{item.SubField}"" />");
-                        }
-                        else
-                        {
-                            fieldstr.Append($@"<wt:display field=""{pre}.{item.FieldName}"" />");
+                            if (string.IsNullOrEmpty(item.RelatedField) == false && item.SubField != "`file")
+                            {
+                                fieldstr.Append($@"<wt:display field=""{pre}.{item.FieldName}.{item.SubField}"" />");
+                            }
+                            else
+                            {
+                                string idname = item.FieldName;
+                                if (string.IsNullOrEmpty(item.RelatedField) == false && item.SubField == "`file")
+                                {
+                                    var filefk = DC.GetFKName2(modelType, item.FieldName);
+                                    idname = filefk;
+                                }
+                                fieldstr.Append($@"<wt:display field=""{pre}.{idname}"" />");
+                            }
                         }
                     }
                     else
                     {
                         if (string.IsNullOrEmpty(item.RelatedField) == false)
                         {
-                            if (item.SubField == "`file")
+                            var filefk = DC.GetFKName2(modelType, item.FieldName);
+                            if (item.SubField == "`file" )
                             {
-                                fieldstr.Append($@"<wt:upload field=""{pre}.{item.FieldName}"" />");
+                                if (name != "BatchEditView")
+                                {
+                                    fieldstr.Append($@"<wt:upload field=""{pre}.{filefk}"" />");
+                                }
                             }
                             else
                             {
-                                var fname = "All" + item.FieldName.Substring(0, item.FieldName.Length - 2) + "s";
+                                var fname = "All" + item.FieldName + "s";
                                 if (name == "BatchEditView")
                                 {
                                     fname = "LinkedVM." + fname;
                                 }
-                                fieldstr.Append($@"<wt:combobox field=""{pre}.{item.FieldName}"" items=""{fname}""/>");
+                                if (string.IsNullOrEmpty(item.SubIdField))
+                                {
+                                    fieldstr.Append($@"<wt:combobox field=""{pre}.{filefk}"" items=""{fname}""/>");
+                                }
+                                else
+                                {
+                                    if (name == "BatchEditView")
+                                    {
+                                        fieldstr.Append($@"<wt:checkbox field=""LinkedVM.Selected{item.FieldName}IDs"" items=""{fname}""/>");
+                                    }
+                                    else
+                                    {
+                                        fieldstr.Append($@"<wt:checkbox field=""Selected{item.FieldName}IDs"" items=""{fname}""/>");
+                                    }
+                                }
                             }
                         }
                         else
@@ -586,7 +742,7 @@ namespace WalkingTec.Mvvm.Mvc
                             {
                                 fieldstr.Append($@"<wt:combobox field=""{pre}.{item.FieldName}"" />");
                             }
-                            else if (checktype.IsPrimitive || checktype == typeof(string))
+                            else if (checktype.IsPrimitive || checktype == typeof(string) || checktype == typeof(decimal))
                             {
                                 fieldstr.Append($@"<wt:textbox field=""{pre}.{item.FieldName}"" />");
                             }
@@ -613,8 +769,21 @@ namespace WalkingTec.Mvvm.Mvc
                 {
                     if (string.IsNullOrEmpty(item.RelatedField) == false)
                     {
-                        var fname = "All" + item.FieldName.Substring(0, item.FieldName.Length - 2) + "s";
-                        fieldstr.Append($@"<wt:combobox field=""Searcher.{item.FieldName}"" items=""Searcher.{fname}"" empty-text=""全部"" />");
+                        if(item.SubField == "`file")
+                        {
+                            continue;
+                        }
+                        var fname = "All" + item.FieldName + "s";
+                        var fk = "";
+                        if (string.IsNullOrEmpty(item.SubIdField))
+                        {
+                            fk = DC.GetFKName2(modelType, item.FieldName); ;
+                        }
+                        else
+                        {
+                            fk = $@"Selected{item.FieldName}IDs";
+                        }
+                        fieldstr.Append($@"<wt:combobox field=""Searcher.{fk}"" items=""Searcher.{fname}"" empty-text=""全部"" />");
                     }
                     else
                     {
@@ -624,7 +793,7 @@ namespace WalkingTec.Mvvm.Mvc
                         {
                             checktype = proType.GetGenericArguments()[0];
                         }
-                        if (checktype.IsPrimitive || checktype == typeof(string))
+                        if (checktype.IsPrimitive || checktype == typeof(string) || checktype == typeof(decimal))
                         {
                             fieldstr.Append($@"<wt:textbox field=""Searcher.{item.FieldName}"" />");
                         }
@@ -632,7 +801,7 @@ namespace WalkingTec.Mvvm.Mvc
                         {
                             fieldstr.Append($@"<wt:datetime field=""Searcher.{item.FieldName}"" />");
                         }
-                        if (checktype.IsEnum())
+                        if (checktype.IsEnum() || checktype.IsBool())
                         {
                             fieldstr.Append($@"<wt:combobox field=""Searcher.{item.FieldName}"" empty-text=""全部"" />");
                         }
@@ -655,21 +824,38 @@ namespace WalkingTec.Mvvm.Mvc
                 StringBuilder fieldstr = new StringBuilder();
                 var pros = FieldInfos.Where(x => x.IsListField == true).ToList();
                 fieldstr.Append(Environment.NewLine);
+                List<PropertyInfo> existSubPro = new List<PropertyInfo>();
                 for (int i = 0; i < pros.Count; i++)
                 {
                     var item = pros[i];
                     string label = modelType.GetProperty(item.FieldName).GetPropertyDisplayName();
                     string render = "columnsRender";
+                    string newname = item.FieldName;
                     if (string.IsNullOrEmpty(item.RelatedField) == false)
                     {
                         var subtype = Type.GetType(item.RelatedField);
+                        var subpro = subtype.GetProperty(item.SubField);
+                        existSubPro.Add(subpro);
+                        string prefix = "";
+                        int count = existSubPro.Where(x => x.Name == subpro.Name).Count();
+                        if (count > 1)
+                        {
+                            prefix = count + "";
+                        }
                         if (subtype == typeof(FileAttachment))
                         {
                             render = "columnsRenderImg";
+                            var fk = DC.GetFKName2(modelType, item.FieldName);
+                            newname = fk;
+                        }
+                        else
+                        {
+                            newname = item.SubField  + "_view" + prefix;
                         }
                     }
-                    fieldstr.Append($@"{{
-        dataIndex: ""{item.FieldName}"",
+                    fieldstr.Append($@"
+    {{
+        dataIndex: ""{newname}"",
         title: ""{label}"",
         render: {render} 
     }}");
@@ -684,83 +870,11 @@ namespace WalkingTec.Mvvm.Mvc
             if (name == "models")
             {
                 StringBuilder fieldstr = new StringBuilder();
+                StringBuilder fieldstr2 = new StringBuilder();
                 var pros = FieldInfos.Where(x => x.IsFormField == true).ToList();
+                var pros2 = FieldInfos.Where(x => x.IsSearcherField == true).ToList();
 
-                for (int i = 0; i < pros.Count; i++)
-                {
-                    var item = pros[i];
-                    string label = modelType.GetProperty(item.FieldName).GetPropertyDisplayName();
-                    if (string.IsNullOrEmpty(item.RelatedField) == false)
-                    {
-                        var subtype = Type.GetType(item.RelatedField);
-                        if (item.SubField == "`file")
-                        {
-                            fieldstr.Append($@"{item.FieldName}: <UploadImg />");
-                        }
-                        else
-                        {
-
-                            fieldstr.Append($@"{item.FieldName}: <Select placeholder=""{label}"" showArrow allowClear></Select>");
-                        }
-                    }
-                    else
-                    {
-                        var proType = modelType.GetProperty(item.FieldName).PropertyType;
-                        Type checktype = proType;
-                        if (proType.IsNullable())
-                        {
-                            checktype = proType.GetGenericArguments()[0];
-                        }
-                        if (checktype == typeof(bool) || checktype.IsEnum())
-                        {
-                            fieldstr.Append($@"{item.FieldName}: <Switch checkedChildren={{<Icon type=""check"" />}} unCheckedChildren={{<Icon type=""close"" />}} />");
-                        }
-                        else if (checktype.IsPrimitive || checktype == typeof(string))
-                        {
-                            fieldstr.Append($@"{item.FieldName}: <Input placeholder=""请输入 {label}"" />");
-                        }
-                        else if (checktype == typeof(DateTime))
-                        {
-                            fieldstr.Append($@"{item.FieldName}: <Input placeholder=""请输入 {label}"" />");
-                        }
-                    }
-                    if (i < pros.Count - 1)
-                    {
-                        fieldstr.Append(",");
-                    }
-                    fieldstr.Append(Environment.NewLine);
-                }
-                return rv.Replace("$fields$", fieldstr.ToString());
-            }
-
-            if (name == "search")
-            {
-                StringBuilder fieldstr = new StringBuilder();
-                var pros = FieldInfos.Where(x => x.IsSearcherField == true).ToList();
-
-                for (int i = 0; i < pros.Count; i++)
-                {
-                    var item = pros[i];
-                    string label = modelType.GetProperty(item.FieldName).GetPropertyDisplayName();
-
-                    fieldstr.Append($@"
-<Form.Item label=""{label}"" {{...formItemLayout}}>
-    {{getFieldDecorator('{item.FieldName}', {{
-        initialValue: Store.searchParams['{item.FieldName}']
-    }})(Models.{item.FieldName})}}
-</Form.Item>
-");
-                    fieldstr.Append(Environment.NewLine);
-                }
-                return rv.Replace("$fields$", fieldstr.ToString());
-            }
-            if (name == "details")
-            {
-                StringBuilder addfield = new StringBuilder();
-                StringBuilder editfield = new StringBuilder();
-                StringBuilder detailfield = new StringBuilder();
-                var pros = FieldInfos.Where(x => x.IsFormField == true).ToList();
-
+                //生成表单model
                 for (int i = 0; i < pros.Count; i++)
                 {
                     var item = pros[i];
@@ -772,69 +886,226 @@ namespace WalkingTec.Mvvm.Mvc
                     {
                         rules = $@"rules: [{{ ""required"": true, ""message"": ""{label}不能为空"" }}]";
                     }
-
-                    if (string.IsNullOrEmpty(item.RelatedField) == false && item.SubField == "`file")
+                    fieldstr.AppendLine($@"            /** {label} */");
+                    if (string.IsNullOrEmpty(item.RelatedField) == false && string.IsNullOrEmpty(item.SubIdField) == true)
                     {
-                        addfield.Append($@"
-<InfoShellCol span={{24}}>
-    <Form.Item label=""{label}""  {{...formItemLayoutRow}}>
-        {{getFieldDecorator('{item.FieldName}', {{
-
-        }})(Models.{item.FieldName})}}
-    </Form.Item >
-</InfoShellCol>
-");
-                        editfield.Append($@"
-<InfoShellCol span={{24}}>
-    <Form.Item label=""{label}""  {{...formItemLayoutRow}}>
-        {{getFieldDecorator('{item.FieldName}', {{
-            initialValue: details['{item.FieldName}']
-        }})(Models.{item.FieldName})}}
-    </Form.Item >
-</InfoShellCol>
-");
-                        detailfield.Append($@"
-<InfoShellCol span={{24}}>
-    <Form.Item label=""{label}""  {{...formItemLayoutRow}}>
-        <span>
-            <ToImg fileID={{details['{item.FieldName}']}} />
-        </span>
-    </Form.Item >
-</InfoShellCol>
-");
+                        var fk = DC.GetFKName2(modelType, item.FieldName);
+                        fieldstr.AppendLine($@"            {fk}:{{");
                     }
                     else
                     {
-
-                        addfield.Append($@"
-<Form.Item label=""{label}"" {{...formItemLayout}}>
-    {{getFieldDecorator('{item.FieldName}', {{
-        {rules}
-    }})(Models.{item.FieldName})}}
-</Form.Item>
-");
-
-                        editfield.Append($@"
-<Form.Item label=""{label}"" {{...formItemLayout}}>
-    {{getFieldDecorator('{item.FieldName}', {{
-        {rules},
-        initialValue: toValues(details['{item.FieldName}'])
-    }})(Models.{item.FieldName})}}
-</Form.Item>
-");
-
-                        detailfield.Append($@"
-<Form.Item label=""{label}"" {{...formItemLayout}}>
-    <span>{{toValues(details['{item.FieldName}'], ""span"")}}</span>
-</Form.Item>
-");
+                        fieldstr.AppendLine($@"            {item.FieldName}:{{");
                     }
-                    addfield.Append(Environment.NewLine);
-                    editfield.Append(Environment.NewLine);
-                    detailfield.Append(Environment.NewLine);
+                    fieldstr.AppendLine($@"                label: ""{label}"",");
+                    fieldstr.AppendLine($@"                {rules},");
+                    if (string.IsNullOrEmpty(item.RelatedField) == false)
+                    {
+                        var subtype = Type.GetType(item.RelatedField);
+                        if (item.SubField == "`file")
+                        {
+                            fieldstr.AppendLine($@"                formItem: <WtmUploadImg />");
+                        }
+                        else
+                        {
+                            if (string.IsNullOrEmpty(item.SubIdField) == true)
+                            {
+                                fieldstr.AppendLine($@"                formItem: <WtmSelect placeholder=""{label}"" 
+                    dataSource ={{ Store.Request.cache({{ url: ""/{ModelName}/Get{subtype.Name}s"" }})}} 
+                /> ");
+                            }
+                            else
+                            {
+                                fieldstr.AppendLine($@"                formItem: <WtmTransfer
+                    dataSource={{Store.Request.cache({{ url: ""/{ModelName}/Get{subtype.Name}s"" }})}}
+                    dataKey=""{item.SubIdField}""
+                /> ");
 
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var proType = modelType.GetProperty(item.FieldName).PropertyType;
+                        Type checktype = proType;
+                        if (proType.IsNullable())
+                        {
+                            checktype = proType.GetGenericArguments()[0];
+                        }
+                        if (checktype == typeof(bool))
+                        {
+                            fieldstr.AppendLine($@"                formItem: <Switch checkedChildren={{<Icon type=""check"" />}} unCheckedChildren={{<Icon type=""close"" />}} />");
+                        }
+                        else if (checktype.IsEnum())
+                        {
+                            var es = checktype.ToListItems();
+                            fieldstr.AppendLine($@"                formItem: <WtmSelect placeholder=""{label}"" dataSource={{[  ");
+                            for(int a=0;a<es.Count;a++)
+                            {
+                                var e = es[a];
+                                fieldstr.Append($@"                    {{ Text: ""{e.Text}"", Value: {e.Value} }}");
+                                if(a < es.Count - 1)
+                                {
+                                    fieldstr.Append(",");
+                                }
+                                fieldstr.AppendLine();
+                            }
+                            fieldstr.AppendLine($@"                ]}}/>");
+                        }
+                        else if (checktype.IsNumber())
+                        {
+                            fieldstr.AppendLine($@"                formItem: <InputNumber placeholder=""请输入 {label}"" />");
+                        }
+                        else if (checktype == typeof(string))
+                        {
+                            fieldstr.AppendLine($@"                formItem: <Input placeholder=""请输入 {label}"" />");
+                        }
+                        else if (checktype == typeof(DateTime))
+                        {
+                            fieldstr.AppendLine($@"                formItem: <WtmDatePicker placeholder=""请输入 {label}"" />");
+                        }
+                    }
+                    fieldstr.Append("            }");
+                    if (i < pros.Count - 1)
+                    {
+                        fieldstr.Append(",");
+                    }
+                    fieldstr.Append(Environment.NewLine);
                 }
-                return rv.Replace("$addfields$", addfield.ToString()).Replace("$editfields$", editfield.ToString()).Replace("$detailfields$", detailfield.ToString());
+
+                //生成searchmodel
+                for (int i = 0; i < pros2.Count; i++)
+                {
+                    var item = pros2[i];
+                    if(item.SubField == "`file")
+                    {
+                        continue;
+                    }
+                    var property = modelType.GetProperty(item.FieldName);
+                    string label = property.GetPropertyDisplayName();
+                    string rules = "rules: []";
+
+                    fieldstr2.AppendLine($@"            /** {label} */");
+                    if (string.IsNullOrEmpty(item.RelatedField) == false)
+                    {
+                        if (string.IsNullOrEmpty(item.SubIdField) == true)
+                        {
+                            var fk = DC.GetFKName2(modelType, item.FieldName);
+                            fieldstr2.AppendLine($@"            {fk}:{{");
+                        }
+                        else
+                        {
+                            fieldstr2.AppendLine($@"            Selected{item.FieldName}IDs:{{");
+                        }
+                    }
+                    else
+                    {
+                        fieldstr2.AppendLine($@"            {item.FieldName}:{{");
+                    }
+                    fieldstr2.AppendLine($@"                label: ""{label}"",");
+                    fieldstr2.AppendLine($@"                {rules},");
+                    if (string.IsNullOrEmpty(item.RelatedField) == false)
+                    {
+                        var subtype = Type.GetType(item.RelatedField);
+                        if (string.IsNullOrEmpty(item.SubIdField) == true)
+                        {
+                            fieldstr2.AppendLine($@"                formItem: <WtmSelect placeholder=""全部"" 
+                    dataSource ={{ Store.Request.cache({{ url: ""/{ModelName}/Get{subtype.Name}s"" }})}} 
+                /> ");
+                        }
+                        else
+                        {
+                            fieldstr2.AppendLine($@"                formItem: <WtmSelect placeholder=""全部""  multiple
+                    dataSource ={{ Store.Request.cache({{ url: ""/{ModelName}/Get{subtype.Name}s"" }})}}
+                /> ");
+
+                        }
+                    }
+                    else
+                    {
+                        var proType = modelType.GetProperty(item.FieldName).PropertyType;
+                        Type checktype = proType;
+                        if (proType.IsNullable())
+                        {
+                            checktype = proType.GetGenericArguments()[0];
+                        }
+                        if (checktype == typeof(bool))
+                        {
+                            fieldstr2.AppendLine($@"                formItem: <WtmSelect placeholder=""全部""  dataSource={{[
+                    {{ Text: ""是"", Value: true }},{{ Text: ""否"", Value: false }}
+                ]}}/>");
+                        }
+                        else if (checktype.IsEnum())
+                        {
+                            var es = checktype.ToListItems();
+                            fieldstr2.AppendLine($@"                formItem: <WtmSelect placeholder=""全部"" dataSource={{[  ");
+                            for (int a = 0; a < es.Count; a++)
+                            {
+                                var e = es[a];
+                                fieldstr2.Append($@"                    {{ Text: ""{e.Text}"", Value: {e.Value} }}");
+                                if (a < es.Count - 1)
+                                {
+                                    fieldstr2.Append(",");
+                                }
+                                fieldstr2.AppendLine();
+                            }
+                            fieldstr2.AppendLine($@"                ]}}/>");
+                        }
+                        else if (checktype.IsNumber())
+                        {
+                            fieldstr2.AppendLine($@"                formItem: <InputNumber placeholder="""" />");
+                        }
+                        else if (checktype == typeof(string))
+                        {
+                            fieldstr2.AppendLine($@"                formItem: <Input placeholder="""" />");
+                        }
+                        else if (checktype == typeof(DateTime))
+                        {
+                            fieldstr2.AppendLine($@"                formItem: <WtmDatePicker placeholder="""" />");
+                        }
+                    }
+                    fieldstr2.Append("            }");
+                    if (i < pros.Count - 1)
+                    {
+                        fieldstr2.Append(",");
+                    }
+                    fieldstr2.Append(Environment.NewLine);
+                }
+
+                return rv.Replace("$fields$", fieldstr.ToString()).Replace("$fields2$", fieldstr2.ToString());
+            }
+
+            if (name == "search")
+            {
+                return rv;
+            }
+            if (name == "forms")
+            {
+                StringBuilder fieldstr = new StringBuilder();
+                var pros = FieldInfos.Where(x => x.IsFormField == true).ToList();
+
+                for (int i = 0; i < pros.Count; i++)
+                {
+                    var item = pros[i];
+                    if (string.IsNullOrEmpty(item.SubIdField))
+                    {
+                        if (string.IsNullOrEmpty(item.RelatedField) == false)
+                        {
+                            var fk = DC.GetFKName2(modelType, item.FieldName);
+                            fieldstr.AppendLine($@"                <FormItem {{...props}} fieId=""{fk}"" />");
+                        }
+                        else
+                        {
+                            fieldstr.AppendLine($@"                <FormItem {{...props}} fieId=""{item.FieldName}"" />");
+                        }
+                    }
+                    else
+                    {
+                        fieldstr.AppendLine($@"                <Col span={{24}}>
+                    <FormItem {{...props}} fieId=""{item.FieldName}"" layout=""row"" />
+                </Col>");
+                    }
+                }
+                return rv.Replace("$fields$", fieldstr.ToString());
             }
 
             return rv;
@@ -908,6 +1179,7 @@ namespace WalkingTec.Mvvm.Mvc
         public bool IsBatchField { get; set; }
 
         public string SubField { get; set; }
+        public string SubIdField { get; set; }
 
     }
 }

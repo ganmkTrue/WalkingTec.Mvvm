@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -188,8 +189,9 @@ namespace WalkingTec.Mvvm.Core.Extensions
             //如果value字段为空，则默认使用Id字段作为value值
             if (valueField == null)
             {
-                valueField = x => x.ID.ToString();
+                valueField = x => x.ID.ToString().ToLower();
             }
+
             //如果没有指定忽略权限，则拼接权限过滤的where条件
             if (ignorDataPrivilege == false)
             {
@@ -211,9 +213,23 @@ namespace WalkingTec.Mvvm.Core.Extensions
             var valueMI = typeof(ComboSelectListItem).GetMember("Value")[0];
             MemberBinding valueBind = Expression.Bind(valueMI, cp.Change(valueField.Body, pe));
 
+            //如果是树形结构，给ParentId赋值
+            MemberBinding parentBind = null;
+            var parentMI = typeof(ComboSelectListItem).GetMember("ParentId")[0];
+            if (typeof(ITreeData<T>).IsAssignableFrom(typeof(T)))
+            {
+                var parentMember = Expression.MakeMemberAccess(pe, typeof(ITreeData).GetProperty("ParentId"));
+                var p = Expression.Call(parentMember, "ToString", new Type[] { });
+                var p1 = Expression.Call(p, "ToLower", new Type[] { });
+                parentBind = Expression.Bind(parentMI, p1);
+            }
+            else
+            {
+                parentBind = Expression.Bind(parentMI, Expression.Constant(string.Empty));
+            }
 
             //合并创建新类和绑定字段的表达式，形成类似 new SimpleTextAndValue{ Text = textField, Value = valueField} 的表达式
-            MemberInitExpression init = Expression.MemberInit(newItem, textBind, valueBind);
+            MemberInitExpression init = Expression.MemberInit(newItem, textBind, valueBind, parentBind);
 
             //将最终形成的表达式转化为Lambda，形成类似 x=> new SimpleTextAndValue { Text = x.textField, Value = x.valueField} 的表达式
             var lambda = Expression.Lambda<Func<T, ComboSelectListItem>>(init, pe);
@@ -535,6 +551,13 @@ namespace WalkingTec.Mvvm.Core.Extensions
             }
             else
             {
+                if (typeof(IList).IsAssignableFrom(val.GetType()))
+                {
+                    if( ((IList)val).Count == 0)
+                    {
+                        return baseQuery;
+                    }
+                }
                 return baseQuery.Where(where);
             }
         }
@@ -667,6 +690,22 @@ where S : struct
                     exp = Expression.Call(field.Body, "Contains", null, Expression.Constant(val.ToLower()));
 
                 }
+                var where = Expression.Lambda<Func<T, bool>>(exp, field.Parameters[0]);
+                return baseQuery.Where(where);
+            }
+        }
+
+        public static IQueryable<T> CheckContain<T,S>(this IQueryable<T> baseQuery, List<S> val, Expression<Func<T,S>> field)
+        {
+            if (val == null || val.Count == 0)
+            {
+                return baseQuery;
+            }
+            else
+            {
+                Expression exp = null;
+                exp = Expression.Call(Expression.Constant(val), "Contains", null, field.Body);
+
                 var where = Expression.Lambda<Func<T, bool>>(exp, field.Parameters[0]);
                 return baseQuery.Where(where);
             }

@@ -15,7 +15,7 @@ namespace WalkingTec.Mvvm.Mvc
 
     public class SetupVM : BaseVM
     {
-        private string version = "2.2.6";
+        private string version = "2.2.25";
 
         public bool EnableLog { get; set; }
 
@@ -42,7 +42,9 @@ namespace WalkingTec.Mvvm.Mvc
         [ValidateNever()]
         public string EntryDir { get; set; }
 
-
+        public string ExtraDir { get; set; }
+        public string ExtraNS { get; set; }
+        public bool IsNew { get; set; }
         public string _mainDir;
         [ValidateNever()]
         public string MainDir
@@ -326,9 +328,9 @@ EndProject
                 Directory.CreateDirectory($"{MainDir}\\ClientApp");
                 UnZip("WalkingTec.Mvvm.Mvc.SetupFiles.Mvc.layui.layui.zip", $"{MainDir}\\wwwroot");
                 UnZip("WalkingTec.Mvvm.Mvc.SetupFiles.Spa.React.ClientApp.zip", $"{MainDir}\\ClientApp");
-                File.WriteAllText($"{MainDir}\\Controllers\\UserController.cs", GetResource("UserController.txt", "Spa").Replace("$ns$", MainNs).Replace("$vmns$", vmns), Encoding.UTF8);
-                File.WriteAllText($"{MainDir}\\Controllers\\FileController.cs", GetResource("FileApiController.txt", "Spa").Replace("$ns$", MainNs).Replace("$vmns$", vmns), Encoding.UTF8);
                 File.WriteAllText($"{MainDir}\\Program.cs", GetResource("Program.txt", "Spa").Replace("$ns$", MainNs), Encoding.UTF8);
+                var config = File.ReadAllText($"{MainDir}\\ClientApp\\src\\global.config.tsx");
+                File.WriteAllText($"{MainDir}\\ClientApp\\src\\global.config.tsx", config.Replace("title: \"WalkingTec MVVM\",", $"title: \"{MainNs}\","), Encoding.UTF8);
 
             }
 
@@ -351,6 +353,12 @@ EndProject
                 dbname = MainNs + "_db";
             }
             rv = rv.Replace("{vm.CookiePre}", CookiePre).Replace("{vm.Rpp}", Rpp?.ToString()).Replace("$dbname$", dbname);
+            return rv;
+        }
+
+        public string GetIndex1()
+        {
+            var rv = GetResource("SetupIndex1.txt");
             return rv;
         }
 
@@ -400,6 +408,14 @@ EndProject
                 }
             }
             sr.Dispose();
+
+        }
+
+
+        public void WriteDefaultFiles()
+        {
+            File.WriteAllText($"{MainDir}\\{MainNs}.csproj", GetResource("DefaultProj.txt"), Encoding.UTF8);
+            File.WriteAllText($"{ExtraDir}\\{MainNs}.sln", GetResource("DefaultSolution.txt").Replace("$ns$", MainNs).Replace("$guid$", Guid.NewGuid().ToString()), Encoding.UTF8);
 
         }
     }

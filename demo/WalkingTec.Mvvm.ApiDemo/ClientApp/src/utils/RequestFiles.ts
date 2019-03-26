@@ -6,26 +6,25 @@
  * @desc [description]
 */
 import { message, notification } from "antd";
-import { UploadProps } from "antd/lib/upload";
 import moment from 'moment';
-import Rx from "rxjs";
+import { ajax, AjaxRequest } from "rxjs/ajax";
 import { Request } from './Request';
 /** 文件服务器 */
 const files = {
     fileUpload: {
-        src: "/file/upload",
+        src: "/_file/upload",
         method: "post"
     },
     fileDelete: {
-        src: "/file/deleteFile/{id}",
+        src: "/_file/deleteFile/{id}",
         method: "get"
     },
     fileGet: {
-        src: "/file/getFile",
+        src: "/_file/getFile",
         method: "get"
     },
     fileDownload: {
-        src: "/file/downloadFile",
+        src: "/_file/downloadFile",
         method: "get"
     }
 };
@@ -68,10 +67,10 @@ export class RequestFiles extends Request {
      * 获取 下周 文件
      * @param id 
      */
-    onFileDownload(id) {
+    onFileDownload(id, target = this.target) {
         if (id) {
             const src = files.fileDownload.src;
-            return `${this.compatibleUrl(this.target, src)}/${id}`
+            return `${this.compatibleUrl(target, src)}/${id}`
         }
     }
     /** 文件获取状态 */
@@ -82,7 +81,7 @@ export class RequestFiles extends Request {
      * @param fileType 
      * @param fileName 
      */
-    async download(AjaxRequest: Rx.AjaxRequest, fileType = '.xls', fileName = moment().format("YYYY_MM_DD_hh_mm_ss")) {
+    async download(AjaxRequest: AjaxRequest, fileType = '.xls', fileName = moment().format("YYYY_MM_DD_hh_mm_ss")) {
         this.getHeaders();
         if (this.downloadLoading) {
             return message.warn('文件获取中，请勿重复操作~')
@@ -98,28 +97,34 @@ export class RequestFiles extends Request {
             headers: this.getHeaders(),
             ...AjaxRequest
         }
-        if (AjaxRequest.body) {
-            AjaxRequest.body = this.formatBody(AjaxRequest.body, "body", AjaxRequest.headers);
-        }
-        try {
-            const result = await Rx.Observable.ajax(AjaxRequest).toPromise();
-            this.onCreateBlob(result.response, fileType, fileName).click();
-            notification.success({
-                key: "download",
-                message: `文件下载成功`,
-                description: ''
-            })
-        } catch (error) {
-            notification.error({
-                key: "download",
-                message: '文件下载失败',
-                description: error.message,
-            });
-        }
-        finally {
-            this.NProgress("done")
-            this.downloadLoading = false;
-        }
+        /**
+         * get 方式 直接打开窗口
+         */
+        // if (lodash.isEqual(lodash.toLower('get'), AjaxRequest.method)) {
+        //     window.open(AjaxRequest.url)
+        // } else {
+            // post
+            if (AjaxRequest.body) {
+                AjaxRequest.body = this.formatBody(AjaxRequest.body, "body", AjaxRequest.headers);
+            }
+            try {
+                const result = await ajax(AjaxRequest).toPromise();
+                this.onCreateBlob(result.response, fileType, fileName).click();
+                notification.success({
+                    key: "download",
+                    message: `文件下载成功`,
+                    description: ''
+                })
+            } catch (error) {
+                notification.error({
+                    key: "download",
+                    message: '文件下载失败',
+                    description: error.message,
+                });
+            }
+        // }
+        this.NProgress("done")
+        this.downloadLoading = false;
     }
     /**
      * 创建二进制文件
