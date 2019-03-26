@@ -419,14 +419,14 @@ window.ff = {
         $.get(url, {}, function (data, status) {
             if (status === "success") {
                 $('#' + target).html('<option value = "">请选择</option>');
-                //for (var item of data.data) {
-                for (var i = 0; i < data.data.length; i++) {
-                    var item = data.data[i];
+                //for (var item of data.Data) {
+                for (var i = 0; i < data.Data.length; i++) {
+                    var item = data.Data[i];
                     if (item.selected === true) {
-                        $('#' + target).append('<option value = "' + item.value + '" selected>' + item.text + '</option>');
+                        $('#' + target).append('<option value = "' + item.Value + '" selected>' + item.Text + '</option>');
                     }
                     else {
-                        $('#' + target).append('<option value = "' + item.value + '" >' + item.text + '</option>');
+                        $('#' + target).append('<option value = "' + item.Value + '" >' + item.Text + '</option>');
                     }
                 }
                 var form = layui.form;

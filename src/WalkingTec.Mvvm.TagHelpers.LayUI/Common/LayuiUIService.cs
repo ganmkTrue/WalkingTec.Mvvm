@@ -18,11 +18,11 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI.Common
             string windowid = Guid.NewGuid().ToString();
             if (showDialog == true)
             {
-                innerClick = $"ff.OpenDialog('{url}', '{windowid}', '{title ?? ""}',{width?.ToString() ?? "null"}, {height?.ToString() ?? "null"});";
+                innerClick = $"ff.OpenDialog('{url}','{windowid}','{title ?? ""}',{width?.ToString()??"null"},{height?.ToString()??"null"});";
             }
             else
             {
-                innerClick = $"$.ajax({{cache: false,type: 'GET',url: '{url}',async: true,success: function(data, textStatus, request) {{eval(data);}} }});";
+                innerClick =$"$.ajax({{cache:false,type:'GET',url:'{url}',async:true,success:function(data,textStatus,request){{eval(data);}}}});";
             }
             var click = $"<script>$('#{buttonID}').on('click',function(){{{innerClick};return false;}});</script>";
             string rv = "";
@@ -37,6 +37,21 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI.Common
             rv += click;
             return rv;
         }
+
+        public string MakeDialogButton2(ButtonTypesEnum buttonType, string url, string buttonText, int? width, int? height, string title = null, string buttonID = null, bool showDialog = true, bool resizable = true)
+        {
+            if (buttonID == null)
+            {
+                buttonID = Guid.NewGuid().ToString();
+            }
+            var innerClick = "";
+            string windowid = Guid.NewGuid().ToString();
+          
+            innerClick = $"ff.OpenDialog('{url}','{windowid}','{title ?? "详情"}',{width?.ToString() ?? "800"},{height?.ToString()??"600"});";
+            var rv= $"<input type='button'  value='{buttonText}' onclick={innerClick}>";
+            return rv;
+        }
+
 
         public string MakeDownloadButton(ButtonTypesEnum buttonType, Guid fileID, string buttonText = null, string _DONOT_USE_CS = "default")
         {
@@ -104,9 +119,9 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI.Common
             return $@"<input class=""layui-input"" style=""height:28px""  name=""{name ?? ""}"" id=""{name ?? Utils.GetIdByName(name)}"" value=""{value ?? ""}"" {disable} />";
 
         }
-        public string MakeRedirectButton(ButtonTypesEnum buttonType, string url, string buttonText)
+        public string MakeRedirectButton(ButtonTypesEnum buttonType, string url, string text)
         {
-            return "";
+            return $"<a href='{url}'  onclick=''>{text}</a>";
         }
 
         public string MakeViewButton(ButtonTypesEnum buttonType, Guid fileID,  string buttonText = null, int? width = null, int? height = null, string title = null,  bool resizable = true, string _DONOT_USE_CS = "default")
@@ -116,7 +131,7 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI.Common
 
         public string MakeScriptButton(ButtonTypesEnum buttonType, string url, int? width, int? height, string windowID, string buttonText, string title = null, string buttonID = null, string script = "")
         {
-            return "";
+            return $"<input type='button' value='{buttonText}' onclick={script}>";
         }
     }
 }

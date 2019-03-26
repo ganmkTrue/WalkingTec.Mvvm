@@ -62,6 +62,16 @@ namespace WalkingTec.Mvvm.Core
             return rv;
         }
 
+        public static ColumnFormatInfo MakeDialogButton2(ButtonTypesEnum buttonType, string url, string buttonText, int? width, int? height, string title = null, string buttonID = null, bool showDialog = true, bool resizable = true)
+        {
+            ColumnFormatInfo rv = new ColumnFormatInfo();
+            rv.FormatType = ColumnFormatTypeEnum.Dialog2;
+            rv.ButtonType = buttonType;
+            rv.Url = url;
+            rv.Text = buttonText;
+            return rv;
+        }
+
         public static ColumnFormatInfo MakeRedirectButton(ButtonTypesEnum buttonType, string url, string buttonText)
         {
             ColumnFormatInfo rv = new ColumnFormatInfo();

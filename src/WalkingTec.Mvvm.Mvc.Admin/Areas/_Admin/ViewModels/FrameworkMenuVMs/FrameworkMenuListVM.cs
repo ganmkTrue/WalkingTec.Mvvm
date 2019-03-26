@@ -113,7 +113,13 @@ namespace WalkingTec.Mvvm.Mvc.Admin.ViewModels.FrameworkMenuVMs
         public override IOrderedQueryable<FrameworkMenu_ListView> GetSearchQuery()
         {
             
-            var data = DC.Set<FrameworkMenu>().ToList();
+            var data = DC.Set<FrameworkMenu>()
+                        .CheckContain(Searcher.PageName, x => x.PageName)
+                        .CheckContain(Searcher.ModuleName, x => x.ModuleName)
+                        .CheckContain(Searcher.ActionName, x => x.ActionName)
+                        .CheckEqual(Searcher.ShowOnMenu, x => x.ShowOnMenu)
+                        .CheckEqual(Searcher.IsPublic, x => x.IsPublic)
+                        .CheckEqual(Searcher.FolderOnly, x => x.FolderOnly).ToList();
             var topdata = data.Where(x => x.ParentId == null).ToList().FlatTree(x => x.DisplayOrder);
             topdata.ForEach((x) => { int l = x.GetLevel(); for (int i = 0; i < l; i++) { x.PageName = "&nbsp;&nbsp;&nbsp;&nbsp;" + x.PageName; } });
             if (SearcherMode == ListVMSearchModeEnum.Custom2)

@@ -227,7 +227,7 @@ namespace WalkingTec.Mvvm.Core.Extensions
             }
             else
             {
-                rv = query.Select(lambda).ToList();
+                rv = query.Select(lambda).Distinct().ToList();
             }
 
             return rv;
